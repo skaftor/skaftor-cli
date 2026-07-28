@@ -1,0 +1,38 @@
+name: ✨ Feature request
+description: Suggest an improvement or new command for the skaftor CLI.
+title: "feat: <short description>"
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea! Remember the CLI is intentionally **zero-dependency** and
+        thin over the MCP server — proposals that keep it small and fast are easiest to land.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the workflow pain, not just the feature.
+      placeholder: "When I'm mid-task I can't quickly see the blast radius of a work order without..."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What command / flag / behavior would you add? Show the ideal CLI usage.
+      render: shell
+      placeholder: "skaftor wo blast AUTH-02"
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraints
+      options:
+        - label: This can be implemented with Node built-ins only (no new dependencies)
+        - label: I'm willing to open a PR for this

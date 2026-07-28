@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Questions & discussion
+    url: https://github.com/skaftor/skaftor-cli/discussions
+    about: Ask questions, share workflows, and discuss ideas with the community.
+  - name: 📚 Documentation
+    url: https://skaftor.com/docs/cli/reference
+    about: The full CLI command reference.
+  - name: 🔒 Report a security issue
+    url: https://github.com/skaftor/skaftor-cli/security/advisories/new
+    about: Please report vulnerabilities privately, not as public issues.
+  - name: 🛟 Product support (app.skaftor.com)
+    url: https://skaftor.com/company/contact
+    about: For issues with the Skaftor web app or your account (not the CLI).

@@ -1,0 +1,43 @@
+{
+  "name": "@skaftor/cli",
+  "version": "0.1.1",
+  "description": "Command-line client for Skaftor — drive AI-native software delivery work orders from your terminal over MCP.",
+  "type": "module",
+  "bin": {
+    "skaftor": "bin/skaftor.mjs"
+  },
+  "files": [
+    "bin/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "smoke": "node bin/skaftor.mjs --version && node bin/skaftor.mjs help >/dev/null",
+    "lint": "node --check bin/skaftor.mjs"
+  },
+  "keywords": [
+    "skaftor",
+    "cli",
+    "mcp",
+    "model-context-protocol",
+    "ai-native",
+    "sdlc",
+    "coding-agents",
+    "work-orders",
+    "developer-tools"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skaftor/skaftor-cli.git"
+  },
+  "homepage": "https://skaftor.com",
+  "bugs": {
+    "url": "https://github.com/skaftor/skaftor-cli/issues"
+  },
+  "author": "Skaftor",
+  "license": "Apache-2.0"
+}

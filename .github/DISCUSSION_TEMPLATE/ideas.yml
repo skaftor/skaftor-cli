@@ -1,0 +1,20 @@
+title: "[Idea] "
+labels: ["idea"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: What would you like the CLI (or Skaftor's terminal/MCP workflow) to do?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it matters
+      description: What's the workflow or pain behind it?
+  - type: textarea
+    id: sketch
+    attributes:
+      label: Rough usage sketch (optional)
+      render: shell
