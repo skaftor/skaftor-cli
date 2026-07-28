@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Node ${{ matrix.node }} · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Syntax check (zero-dep, no build)
+        run: node --check bin/skaftor.mjs
+      - name: Smoke test
+        run: |
+          node bin/skaftor.mjs --version
+          node bin/skaftor.mjs help >/dev/null
+      - name: Verify no runtime dependencies
+        run: |
+          node -e "const p=require('./package.json'); const d=Object.keys(p.dependencies||{}); if(d.length){console.error('Unexpected dependencies:',d); process.exit(1)} console.log('OK: zero dependencies')"
