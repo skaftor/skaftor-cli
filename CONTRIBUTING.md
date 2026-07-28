@@ -54,7 +54,7 @@ release notes. Releases are cut by maintainers by tagging `vX.Y.Z` (see
 ## Sign-off (DCO)
 
 By contributing, you agree that your contribution is licensed under the project's
-[Apache-2.0](./LICENSE) license. Please add a `Signed-off-by` line to your commits
+[MIT](./LICENSE) license. Please add a `Signed-off-by` line to your commits
 (`git commit -s`) to certify the [Developer Certificate of Origin](https://developercertificate.org/).
 
 ## Code of Conduct

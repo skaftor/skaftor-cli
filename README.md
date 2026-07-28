@@ -10,9 +10,9 @@ project's **MCP server** (the same surface coding agents like Cursor and Claude 
 connect to), so you can move work orders, pull execution context, and open pull
 requests without leaving the shell.
 
-[![npm version](https://img.shields.io/npm/v/@skaftorai/cli?color=3448ff&label=npm)](https://www.npmjs.com/package/@skaftorai/cli)
+[![npm version](https://img.shields.io/npm/v/skaftor?color=3448ff&label=npm)](https://www.npmjs.com/package/skaftor)
 [![CI](https://github.com/skaftor/skaftor-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/skaftor/skaftor-cli/actions/workflows/ci.yml)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 [![Zero dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](./package.json)
 [![Docs](https://img.shields.io/badge/docs-skaftor.com-3448ff)](https://skaftor.com/docs)
@@ -40,7 +40,7 @@ Needs **Node.js 18+**. No other dependencies.
 curl -fsSL https://app.skaftor.com/install | sh
 
 # or via npm
-npm install -g @skaftorai/cli
+npm install -g skaftor
 ```
 
 ## Connect
@@ -95,4 +95,4 @@ open a public issue for security reports.
 
 ## License
 
-[Apache-2.0](./LICENSE) © Skaftor
+[MIT](./LICENSE) © Skaftor

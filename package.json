@@ -1,5 +1,5 @@
 {
-  "name": "@skaftorai/cli",
+  "name": "skaftor",
   "version": "0.1.1",
   "description": "Command-line client for Skaftor — drive AI-native software delivery work orders from your terminal over MCP.",
   "type": "module",
@@ -39,5 +39,5 @@
     "url": "https://github.com/skaftor/skaftor-cli/issues"
   },
   "author": "Skaftor",
-  "license": "Apache-2.0"
+  "license": "MIT"
 }
