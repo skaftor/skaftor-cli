@@ -6,8 +6,18 @@ All notable changes to the Skaftor CLI are documented here. The format is based 
 
 ## [Unreleased]
 
-### Added
-- Public open-source release of the CLI with community health files and CI/release automation.
+## [0.1.2] - 2026-07-28
+
+First release published from the open-source `skaftor/skaftor-cli` repository.
+No functional CLI changes from 0.1.1 — this release aligns the published package
+with the repo.
+
+### Changed
+- Package name standardized to the unscoped **`skaftor`** (`npm i skaftor`); the
+  interim `@skaftorai/cli` is deprecated and points here.
+- Relicensed to **MIT**.
+- Polished README (badges, usage), added community health files (CONTRIBUTING,
+  CODE_OF_CONDUCT, SECURITY), issue/PR templates, and CI + release automation.
 
 ## [0.1.1] - 2026-07-28
 
@@ -27,6 +37,7 @@ All notable changes to the Skaftor CLI are documented here. The format is based 
 - JSON-RPC 2.0 client over the per-project MCP server; config stored at
   `~/.skaftor/config.json` (mode `600`).
 
-[Unreleased]: https://github.com/skaftor/skaftor-cli/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/skaftor/skaftor-cli/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/skaftor/skaftor-cli/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/skaftor/skaftor-cli/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/skaftor/skaftor-cli/releases/tag/v0.1.0

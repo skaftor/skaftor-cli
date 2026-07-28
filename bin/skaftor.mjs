@@ -13,7 +13,7 @@ import { join } from "node:path";
 
 const CONFIG_DIR = join(homedir(), ".skaftor");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
-const VERSION = "0.1.1";
+const VERSION = "0.1.2";
 
 // ── styling ────────────────────────────────────────────────────────────────
 const tty = process.stdout.isTTY;
