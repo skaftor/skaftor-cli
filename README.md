@@ -10,7 +10,7 @@ project's **MCP server** (the same surface coding agents like Cursor and Claude 
 connect to), so you can move work orders, pull execution context, and open pull
 requests without leaving the shell.
 
-[![npm version](https://img.shields.io/npm/v/@skaftor/cli?color=3448ff&label=npm)](https://www.npmjs.com/package/@skaftor/cli)
+[![npm version](https://img.shields.io/npm/v/@skaftorai/cli?color=3448ff&label=npm)](https://www.npmjs.com/package/@skaftorai/cli)
 [![CI](https://github.com/skaftor/skaftor-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/skaftor/skaftor-cli/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
@@ -40,7 +40,7 @@ Needs **Node.js 18+**. No other dependencies.
 curl -fsSL https://app.skaftor.com/install | sh
 
 # or via npm
-npm install -g @skaftor/cli
+npm install -g @skaftorai/cli
 ```
 
 ## Connect
