@@ -42,7 +42,7 @@ export function usageFor(cmd) {
 export function workstationHelp(bold = (s) => s) {
   return [
     `${bold("WORKSTATIONS")} ${"(premium — needs the workstation feature on your organisation's plan)"}`,
-    ...WORKSTATION_COMMANDS.map((c) => "  " + USAGE[c].replace(/^skaftor /, "").replace(/\n {46}/, "\n" + " ".repeat(39))),
+    ...WORKSTATION_COMMANDS.map((c) => "  " + USAGE[c].replace(/^skaftor /, "").replace(/\n {46}/g, "\n" + " ".repeat(39))),
   ].join("\n");
 }
 

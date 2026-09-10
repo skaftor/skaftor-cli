@@ -48,6 +48,9 @@ test("up maps repo/branch/agent/--on; name optional; --backend and unknown flags
   // --on forwards the target verbatim; the platform decides whether it's granted/known.
   assert.deepEqual(wsToolArgs("up", ["--on", "gcp/vm"]), { tool: "launch_workstation", args: { target: "gcp/vm" } });
   assert.deepEqual(wsToolArgs("up", ["ws1", "--on=skaftor", "--repo", "r"]), { tool: "launch_workstation", args: { name: "ws1", target: "skaftor", repoUrl: "r" } });
+  // a bare `--on` (no value) is dropped like every other value flag → launches on the org default, not an error.
+  assert.deepEqual(wsToolArgs("up", ["--on"]), { tool: "launch_workstation", args: {} });
+  assert.deepEqual(wsToolArgs("up", ["--on", "--repo", "r"]), { tool: "launch_workstation", args: { repoUrl: "r" } });
 });
 
 test("targets → list_targets", () => {
