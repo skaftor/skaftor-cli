@@ -1,6 +1,6 @@
 {
   "name": "skaftor",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Command-line client for Skaftor — drive AI-native software delivery work orders from your terminal over MCP.",
   "type": "module",
   "bin": {
@@ -16,8 +16,9 @@
     "node": ">=18"
   },
   "scripts": {
+    "test": "node --test test/",
     "smoke": "node bin/skaftor.mjs --version && node bin/skaftor.mjs help >/dev/null",
-    "lint": "node --check bin/skaftor.mjs"
+    "lint": "node --check bin/skaftor.mjs && node --check bin/ws.mjs"
   },
   "keywords": [
     "skaftor",
