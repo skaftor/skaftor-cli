@@ -1,6 +1,6 @@
 {
   "name": "skaftor",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Command-line client for Skaftor — drive AI-native software delivery work orders from your terminal over MCP.",
   "type": "module",
   "bin": {

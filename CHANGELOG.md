@@ -6,6 +6,15 @@ All notable changes to the Skaftor CLI are documented here. The format is based 
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-11
+
+### Added
+- **Choose where a workstation runs.** `skaftor targets` lists the launch targets your organisation's
+  plan offers — Skaftor Cloud and/or your organisation's own connected cloud (VM or Kubernetes), with the
+  default marked. `skaftor up --on <target>` launches on a specific one; omit `--on` for the org default.
+  Where you can launch, and whether a target is granted, is decided by the platform — this CLI only
+  forwards the choice.
+
 ## [0.2.1] - 2026-09-10
 
 ### Changed
