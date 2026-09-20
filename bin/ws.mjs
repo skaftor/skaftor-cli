@@ -13,20 +13,23 @@ import https from "node:https";
 import crypto from "node:crypto";
 
 // ── commands, usage, help ──────────────────────────────────────────────────────
-// Infrastructure is Skaftor's business: where a workstation runs is decided by your organisation's plan,
-// so there is no backend to list or pick — `up` just launches on Skaftor Cloud.
-export const WORKSTATION_COMMANDS = ["ws", "up", "ssh", "start", "stop", "rm", "verify"];
+// Infrastructure is Skaftor's business: where a workstation runs is decided by your organisation's plan.
+// You may CHOOSE among the targets your plan offers (Skaftor Cloud and/or your organisation's own cloud) with
+// `--on <target>`; `skaftor targets` lists them. There is still no backend to register or configure here.
+export const WORKSTATION_COMMANDS = ["ws", "up", "ssh", "start", "stop", "rm", "targets", "verify"];
 
 const USAGE = {
   ws: "skaftor ws                                    List my managed workstations and their status",
   up:
-    "skaftor up [name] [--repo <url>] [--branch <b>] [--agent <a>]\n" +
-    "                                              Launch a managed workstation for me on Skaftor Cloud — returns at once; track it with `skaftor ws`",
+    "skaftor up [name] [--on <target>] [--repo <url>] [--branch <b>] [--agent <a>]\n" +
+    "                                              Launch a managed workstation for me — returns at once; track it with `skaftor ws`.\n" +
+    "                                              --on picks where it runs (see `skaftor targets`); omit it for your organisation's default",
   ssh: "skaftor ssh <name>                            Open an interactive shell in my running workstation (^D to exit)",
   start: "skaftor start <name>                          Power my workstation on",
   stop: "skaftor stop <name>                           Power my workstation off — the home volume is kept",
   rm: "skaftor rm <name> [--yes]                     Delete my workstation and its home volume (asks first unless --yes)",
-  verify: "skaftor verify                                Preflight: plan entitlement · Skaftor Cloud connection · ready to launch",
+  targets: "skaftor targets                               Where I can launch (Skaftor Cloud and/or my organisation's own cloud), with the default marked",
+  verify: "skaftor verify                                Preflight: plan entitlement · where I can launch · connection · ready to launch",
 };
 
 /** One-line usage for a workstation command — also what `skaftor <cmd> --help` prints. */
@@ -39,7 +42,7 @@ export function usageFor(cmd) {
 export function workstationHelp(bold = (s) => s) {
   return [
     `${bold("WORKSTATIONS")} ${"(premium — needs the workstation feature on your organisation's plan)"}`,
-    ...WORKSTATION_COMMANDS.map((c) => "  " + USAGE[c].replace(/^skaftor /, "").replace(/\n {46}/, "\n" + " ".repeat(39))),
+    ...WORKSTATION_COMMANDS.map((c) => "  " + USAGE[c].replace(/^skaftor /, "").replace(/\n {46}/g, "\n" + " ".repeat(39))),
   ].join("\n");
 }
 
@@ -74,9 +77,12 @@ export function wsToolArgs(cmd, argv = []) {
   switch (cmd) {
     case "ws": case "list":
       return { tool: "list_workstations", args: {} };
+    case "targets":
+      return { tool: "list_targets", args: {} };
     case "up": case "launch":
-      // A `--backend` flag (pre-0.2.1) is ignored: infrastructure is chosen by the plan, on the server.
-      return { tool: "launch_workstation", args: pick({ name: str(_[0]), repoUrl: str(flags.repo), branch: str(flags.branch), agent: str(flags.agent) }) };
+      // `--on <target>` picks WHERE among the targets the plan offers (server-decided; unknown/ungranted
+      // targets are refused there). A `--backend` flag (pre-0.2.1) is still ignored.
+      return { tool: "launch_workstation", args: pick({ name: str(_[0]), target: str(flags.on), repoUrl: str(flags.repo), branch: str(flags.branch), agent: str(flags.agent) }) };
     case "start": case "stop": case "rm":
       return { tool: "transition_workstation", args: { name: need(cmd, str(_[0]), "workstation name"), action: cmd === "rm" ? "delete" : cmd } };
     case "ssh":

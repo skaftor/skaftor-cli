@@ -38,13 +38,24 @@ test("ws / ws list → list_workstations", () => {
   assert.deepEqual(wsToolArgs("ws", ["list"]), { tool: "list_workstations", args: {} });
 });
 
-test("up maps repo/branch/agent; name optional; --backend and unknown flags are ignored (infra is the plan's, not ours)", () => {
+test("up maps repo/branch/agent/--on; name optional; --backend and unknown flags are ignored (infra is the plan's, not ours)", () => {
   assert.deepEqual(wsToolArgs("up", ["--repo", "bitbucket.org/x/y", "--branch", "feat/z", "--agent", "claude"]), {
     tool: "launch_workstation", args: { repoUrl: "bitbucket.org/x/y", branch: "feat/z", agent: "claude" },
   });
   assert.deepEqual(wsToolArgs("up", ["my-ws", "--agent=codex"]), { tool: "launch_workstation", args: { name: "my-ws", agent: "codex" } });
   assert.deepEqual(wsToolArgs("up", ["--backend", "b1"]), { tool: "launch_workstation", args: {} });
   assert.deepEqual(wsToolArgs("launch", []), { tool: "launch_workstation", args: {} });
+  // --on forwards the target verbatim; the platform decides whether it's granted/known.
+  assert.deepEqual(wsToolArgs("up", ["--on", "gcp/vm"]), { tool: "launch_workstation", args: { target: "gcp/vm" } });
+  assert.deepEqual(wsToolArgs("up", ["ws1", "--on=skaftor", "--repo", "r"]), { tool: "launch_workstation", args: { name: "ws1", target: "skaftor", repoUrl: "r" } });
+  // a bare `--on` (no value) is dropped like every other value flag → launches on the org default, not an error.
+  assert.deepEqual(wsToolArgs("up", ["--on"]), { tool: "launch_workstation", args: {} });
+  assert.deepEqual(wsToolArgs("up", ["--on", "--repo", "r"]), { tool: "launch_workstation", args: { repoUrl: "r" } });
+});
+
+test("targets → list_targets", () => {
+  assert.deepEqual(wsToolArgs("targets", []), { tool: "list_targets", args: {} });
+  assert.ok(WORKSTATION_COMMANDS.includes("targets"), "targets is a developer command");
 });
 
 test("start / stop / rm → transition_workstation with the right action; rm is delete", () => {

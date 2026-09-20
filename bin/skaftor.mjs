@@ -19,7 +19,7 @@ const CONFIG_DIR = join(homedir(), ".skaftor");
 // each other. A legacy platform-shaped config.json is migrated once (see loadConfig).
 const CONFIG_FILE = join(CONFIG_DIR, "platform.json");
 const LEGACY_FILE = join(CONFIG_DIR, "config.json");
-const VERSION = "0.2.1";
+const VERSION = "0.2.2";
 
 // ── styling ────────────────────────────────────────────────────────────────
 const tty = process.stdout.isTTY;
@@ -407,7 +407,7 @@ async function main() {
     }
 
     // ── managed workstations (premium — the platform decides; this CLI only renders) ────────
-    case "ws": case "up": case "launch": case "start": case "stop": case "rm": case "verify": case "ssh": {
+    case "ws": case "up": case "launch": case "start": case "stop": case "rm": case "targets": case "verify": case "ssh": {
       if (flags.help) { console.log(usageFor(cmd)); return; }
       let call;
       try { call = wsToolArgs(cmd, argv.slice(1)); } catch (e) { die(e.message); }
