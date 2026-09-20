@@ -6,6 +6,27 @@ All notable changes to the Skaftor CLI are documented here. The format is based 
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-10
+
+### Added
+- **Managed workstations (premium).** `skaftor ws`, `up`, `ssh`, `start`, `stop`, `rm`,
+  `verify`, `backend list|verify` — every command with a help description and `--help`.
+  All calls go through the platform, which checks your organisation's plan entitlement and
+  workstation ownership; the CLI holds no secret and enforces nothing.
+- `skaftor ssh <name>`: interactive shell over a one-hour, single-workstation credential
+  issued by the platform; renewed at ~45 min (refused once the organisation loses the
+  feature, so the session ends at expiry). Zero-dependency websocket bridge.
+- `bin/ws.mjs`: the pure, unit-tested helpers behind the above; `npm test` (`node --test`).
+
+### Changed
+- The connection store moved to `~/.skaftor/platform.json`. An older platform-shaped
+  `~/.skaftor/config.json` is migrated once, automatically.
+
+### Fixed
+- The CLI no longer crashes on every command when `~/.skaftor/config.json` belongs to the
+  skaftor-cloud operator CLI (a different `{url, token}` shape). The two tools now keep
+  separate files and never clobber each other.
+
 ## [0.1.2] - 2026-07-28
 
 First release published from the open-source `skaftor/skaftor-cli` repository.
@@ -37,7 +58,8 @@ with the repo.
 - JSON-RPC 2.0 client over the per-project MCP server; config stored at
   `~/.skaftor/config.json` (mode `600`).
 
-[Unreleased]: https://github.com/skaftor/skaftor-cli/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/skaftor/skaftor-cli/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/skaftor/skaftor-cli/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/skaftor/skaftor-cli/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/skaftor/skaftor-cli/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/skaftor/skaftor-cli/releases/tag/v0.1.0

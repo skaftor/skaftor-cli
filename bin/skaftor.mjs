@@ -10,10 +10,16 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, chmodSync } from "node:fs";
 import { homedir, platform, release } from "node:os";
 import { join } from "node:path";
+import readline from "node:readline";
+import { wsToolArgs, usageFor, parsePtyBlock, ptyDescFromUrl, refreshDelay, wsConnect, workstationHelp } from "./ws.mjs";
 
 const CONFIG_DIR = join(homedir(), ".skaftor");
-const CONFIG_FILE = join(CONFIG_DIR, "config.json");
-const VERSION = "0.1.2";
+// The platform CLI's OWN store. The skaftor-cloud operator CLI also lives in ~/.skaftor but writes
+// config.json as {url, token}; keeping this CLI in its own file means the two never clobber (or crash)
+// each other. A legacy platform-shaped config.json is migrated once (see loadConfig).
+const CONFIG_FILE = join(CONFIG_DIR, "platform.json");
+const LEGACY_FILE = join(CONFIG_DIR, "config.json");
+const VERSION = "0.2.0";
 
 // ── styling ────────────────────────────────────────────────────────────────
 const tty = process.stdout.isTTY;
@@ -26,10 +32,23 @@ const cyan = (s) => c("36", s);
 const die = (msg) => { console.error(red("error: ") + msg); process.exit(1); };
 
 // ── config store ─────────────────────────────────────────────────────────────
+// A platform config is {current, connections}. Anything else (a missing/corrupt file, or the
+// skaftor-cloud CLI's {url, token}) is foreign — normalize it to an empty config rather than crash.
+const isPlatformShape = (o) => !!o && typeof o === "object" && typeof o.connections === "object" && o.connections !== null;
 function loadConfig() {
-  if (!existsSync(CONFIG_FILE)) return { current: null, connections: {} };
-  try { return JSON.parse(readFileSync(CONFIG_FILE, "utf8")); }
-  catch { die(`config at ${CONFIG_FILE} is corrupt; delete it and log in again`); }
+  const readJson = (f) => { try { return JSON.parse(readFileSync(f, "utf8")); } catch { return undefined; } };
+  let cfg = existsSync(CONFIG_FILE) ? readJson(CONFIG_FILE) : undefined;
+  // One-time migration: adopt a legacy ~/.skaftor/config.json ONLY if it is ours (has connections);
+  // the skaftor-cloud CLI uses that same name for {url, token}, which we must not adopt.
+  if (!isPlatformShape(cfg) && existsSync(LEGACY_FILE)) {
+    const legacy = readJson(LEGACY_FILE);
+    // Persist the migration to platform.json now (once), so the login survives even before the
+    // next write command and even if the skaftor-cloud CLI later overwrites config.json.
+    if (isPlatformShape(legacy)) { cfg = legacy; saveConfig(cfg); }
+  }
+  if (!isPlatformShape(cfg)) return { current: null, connections: {} };
+  if (typeof cfg.current === "undefined") cfg.current = null;
+  return cfg;
 }
 function saveConfig(cfg) {
   mkdirSync(CONFIG_DIR, { recursive: true });
@@ -54,7 +73,7 @@ function parseMcpUrl(url) {
 
 // ── JSON-RPC transport ───────────────────────────────────────────────────────
 let RPC_ID = 0;
-async function rpc(conn, method, params) {
+async function rpc(conn, method, params, { soft = false } = {}) {
   const url = `${conn.origin}/api/mcp/${conn.projectId}?dev=${conn.token}`;
   let res;
   try {
@@ -64,24 +83,139 @@ async function rpc(conn, method, params) {
       body: JSON.stringify({ jsonrpc: "2.0", id: ++RPC_ID, method, params }),
     });
   } catch (e) {
-    die(`could not reach ${conn.origin} — is the platform up and the URL right? (${e.message})`);
+    const msg = `could not reach ${conn.origin} — is the platform up and the URL right? (${e.message})`;
+    if (soft) return { error: msg };
+    die(msg);
   }
   const text = await res.text();
   let body;
-  try { body = JSON.parse(text); } catch { die(`unexpected response from server (HTTP ${res.status}): ${text.slice(0, 200)}`); }
-  if (body.error) die(`${body.error.message}${body.error.code ? dim(` (code ${body.error.code})`) : ""}`);
+  try { body = JSON.parse(text); } catch {
+    const msg = `unexpected response from server (HTTP ${res.status}): ${text.slice(0, 200)}`;
+    if (soft) return { error: msg };
+    die(msg);
+  }
+  if (body.error) {
+    const msg = `${body.error.message}${body.error.code ? dim(` (code ${body.error.code})`) : ""}`;
+    if (soft) return { error: msg };
+    die(msg);
+  }
   return body.result;
 }
 async function callTool(conn, name, args) {
   const result = await rpc(conn, "tools/call", { name, arguments: args || {} });
   return result;
 }
+// Like callTool, but never exits the process: returns { error } on transport/RPC failure. Used
+// mid-session (the ssh credential refresh) where dying would kill the user's shell abruptly.
+async function callToolSoft(conn, name, args) {
+  return rpc(conn, "tools/call", { name, arguments: args || {} }, { soft: true });
+}
+const toolText = (result) => (result?.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
 // Print a tools/call result: the text content, or raw JSON with --json.
 function printToolResult(result, json) {
   if (json) return console.log(JSON.stringify(result, null, 2));
   const text = (result?.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
   if (result?.isError) { console.error(red(text || "tool reported an error")); process.exit(1); }
   console.log(text || dim("(no output)"));
+}
+
+// ── managed workstations (premium) ─────────────────────────────────────────
+// Everything here only RENDERS what the platform decides. The platform checks the organisation's
+// plan entitlement and the developer's ownership on every call — this public CLI holds no secret
+// and enforces nothing, by design (see intent/workstation-cli-gated in the platform repo).
+
+// y/N prompt — a convenience, not a control: the server enforces ownership regardless.
+function confirm(question) {
+  return new Promise((resolve) => {
+    if (!process.stdin.isTTY) return resolve(false);
+    const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
+    rl.question(question, (a) => { rl.close(); resolve(/^y(es)?$/i.test(String(a).trim())); });
+  });
+}
+
+// `skaftor ssh <name>` — the platform issues a 1-hour, single-workstation PTY credential (after ITS
+// entitlement + ownership checks); we bridge this terminal to that websocket and, at ~45 min, ask the
+// platform for a fresh credential with the SAME reconnect id (Coder resumes the shell). A refused
+// refresh means the organisation lost the feature: we print the server's message and the session
+// ends at the credential's expiry. No secret of the platform's ever reaches this process.
+async function sshWorkstation(conn, name, json) {
+  const open = await callTool(conn, "open_workstation_shell", { name });
+  const text = toolText(open);
+  if (open?.isError) die(text || "could not open a shell");
+  const first = parsePtyBlock(text);
+  if (!first) die("the platform did not return a shell credential");
+  if (json) return console.log(JSON.stringify(first, null, 2));
+
+  const isTty = !!(process.stdin.isTTY && process.stdout.isTTY);
+  const size = () => ({ cols: process.stdout.columns || 80, rows: process.stdout.rows || 24 });
+  let handoff = first;
+  let ws = null;
+  let gen = 0;          // which socket is current — a superseded socket's close is ignored
+  let timer = null;
+  let restored = false;
+  const onResize = () => { const s = size(); if (ws) ws.send({ height: s.rows, width: s.cols }); };
+  const restore = () => {
+    if (restored) return; restored = true;
+    if (timer) clearTimeout(timer);
+    try { if (isTty) process.stdin.setRawMode(false); } catch {}
+    try { process.stdin.pause(); } catch {}
+    process.removeListener("SIGWINCH", onResize);
+  };
+  const scheduleRefresh = () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const r = await callToolSoft(conn, "refresh_workstation_credential", { name, reconnect: handoff.reconnect });
+      const t = r?.error ? r.error : toolText(r);
+      const next = r?.error || r?.isError ? null : parsePtyBlock(t);
+      if (!next) {
+        console.error(red(`\n[skaftor] credential refresh refused: ${t || "unknown"} — this session ends at ${handoff.expiresAt}`));
+        return;
+      }
+      handoff = next;
+      connect(false); // opens a new socket; stdin switches to it only once it is OPEN, then the old one is retired
+    }, refreshDelay(handoff.expiresAt));
+  };
+  const connect = (isFirst) => {
+    const prevGen = gen;
+    const my = ++gen;
+    let opened = false;
+    const { cols, rows } = size();
+    const prev = ws;
+    const next = wsConnect(ptyDescFromUrl(handoff.url, { cols, rows }), {
+      onOpen: () => {
+        opened = true;
+        ws = next;                               // stdin now goes to the new socket — nothing typed in the gap is lost
+        if (prev && prev !== next) prev.close(); // retire the old one (its close is ignored: its generation is stale)
+        next.send({ height: rows, width: cols });
+        if (isFirst) {
+          if (isTty) { try { process.stdin.setRawMode(true); } catch {} }
+          process.stdin.resume();
+          process.stdin.on("data", (chunk) => { if (ws) ws.send({ data: chunk.toString("utf8") }); });
+          process.stdin.on("end", () => { if (ws) ws.send({ data: "\x04" }); }); // EOF: let the remote shell exit
+          if (isTty) process.on("SIGWINCH", onResize);
+          console.error(dim(`connected to ${bold(name)} — ^D to exit`));
+        }
+        scheduleRefresh();
+      },
+      onData: (b) => process.stdout.write(b),
+      onClose: (err) => {
+        if (my !== gen) return; // a retired socket
+        if (!opened && !isFirst) {
+          // The renewed connection never opened: keep the live session (it still ends at its own expiry).
+          gen = prevGen; // …so the old socket's eventual close is honoured again
+          console.error(red(`\n[skaftor] could not reconnect with the renewed credential${err ? ` (${err.message})` : ""} — keeping this session until it expires`));
+          return;
+        }
+        restore();
+        if (err) { console.error(red(`\n${err.message}`)); process.exit(1); }
+        process.stdout.write("\n");
+        process.exit(0);
+      },
+    });
+    if (isFirst) ws = next;
+  };
+  connect(true);
+  process.on("exit", restore);
 }
 
 // ── arg parsing ────────────────────────────────────────────────────────────
@@ -138,6 +272,8 @@ ${bold("WORK ORDERS")}
   wo done <code> --pr <url> [...]      Mark done with a PR (see \`skaftor wo done --help\`)
   wo ask <code> <question>             Ask the team a clarifying question
   wo sync <code> [...]                 Report local commit progress
+
+${workstationHelp(bold)}
 
 ${bold("DELIVERY")}
   pr <code>                Prepare / open the pull request for a work order
@@ -268,6 +404,22 @@ async function main() {
         default: die(`unknown work-order command "${sub || ""}". See \`skaftor --help\``);
       }
       return;
+    }
+
+    // ── managed workstations (premium — the platform decides; this CLI only renders) ────────
+    case "ws": case "up": case "launch": case "start": case "stop": case "rm": case "verify": case "backend": case "ssh": {
+      if (flags.help) { console.log(usageFor(cmd)); return; }
+      let call;
+      try { call = wsToolArgs(cmd, argv.slice(1)); } catch (e) { die(e.message); }
+      const conn = currentConn(cfg);
+      if (cmd === "rm" && !flags.yes) {
+        const ok = await confirm(`Delete workstation ${bold(call.args.name)} and its home volume? [y/N] `);
+        if (!ok) { console.log(dim("cancelled")); return; }
+      }
+      if (cmd === "ssh") return sshWorkstation(conn, call.args.name, json);
+      if ((cmd === "up" || cmd === "launch") && call.args.name)
+        console.error(dim("note: a custom name isn't listed or ssh-able until per-user identity lands — omit the name to get an auto-attributed one"));
+      return printToolResult(await callTool(conn, call.tool, call.args), json);
     }
 
     // ── delivery ────────────────────────────────────────────────────────────

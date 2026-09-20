@@ -54,7 +54,8 @@ skaftor context        # list connections, ● marks the active one
 skaftor whoami
 ```
 
-The connection is saved to `~/.skaftor/config.json` (`chmod 600` — it holds a token).
+The connection is saved to `~/.skaftor/platform.json` (`chmod 600` — it holds a token).
+An older `~/.skaftor/config.json` from this CLI is migrated once, automatically.
 
 ## Work orders
 
@@ -73,6 +74,29 @@ skaftor wo done   AUTH-02 --pr https://github.com/acme/repo/pull/42 \
 ```
 
 Full command reference: **[skaftor.com/docs/cli/reference](https://skaftor.com/docs/cli/reference)**.
+
+## Managed workstations (premium)
+
+Launch a fully-loaded cloud workstation for a work order — coding agents pre-installed —
+and drive it from the same login. Available when the **workstation feature is on your
+organisation's plan**; otherwise every command below answers with a clear
+_"not enabled — upgrade"_ message. The platform decides; this CLI holds no secret.
+
+```bash
+skaftor verify                        # preflight: entitlement, cloud connectivity, backend readiness
+skaftor backend list                  # backends you can launch on (id · name · type)
+skaftor up --agent claude             # launch a workstation (returns at once)
+skaftor up --backend <id> --repo bitbucket.org/acme/app --branch feat/x
+skaftor ws                            # your workstations and their status
+skaftor ssh <name>                    # interactive shell (^D to exit)
+skaftor stop <name>  ·  skaftor start <name>
+skaftor rm <name> --yes               # delete it and its home volume
+```
+
+`skaftor ssh` uses a one-hour, single-workstation credential issued by the platform after
+it checks your organisation's entitlement and that the workstation is yours; the CLI renews
+it at ~45 min. If your organisation loses the feature, the renewal is refused and the
+session ends at expiry. Your own login session simply re-authenticates after 24 h idle.
 
 ## How it works
 
