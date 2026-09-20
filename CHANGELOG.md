@@ -6,6 +6,13 @@ All notable changes to the Skaftor CLI are documented here. The format is based 
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-10
+
+### Changed
+- Infrastructure is decided by your organisation's plan and provisioned by Skaftor, so the CLI no
+  longer exposes it: `skaftor backend list|verify` is gone, `up` and `verify` no longer take
+  `--backend` (a leftover `--backend` is ignored). `up` launches on Skaftor Cloud.
+
 ## [0.2.0] - 2026-09-10
 
 ### Added
@@ -58,7 +65,8 @@ with the repo.
 - JSON-RPC 2.0 client over the per-project MCP server; config stored at
   `~/.skaftor/config.json` (mode `600`).
 
-[Unreleased]: https://github.com/skaftor/skaftor-cli/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/skaftor/skaftor-cli/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/skaftor/skaftor-cli/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/skaftor/skaftor-cli/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/skaftor/skaftor-cli/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/skaftor/skaftor-cli/compare/v0.1.0...v0.1.1

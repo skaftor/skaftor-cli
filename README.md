@@ -83,10 +83,9 @@ organisation's plan**; otherwise every command below answers with a clear
 _"not enabled — upgrade"_ message. The platform decides; this CLI holds no secret.
 
 ```bash
-skaftor verify                        # preflight: entitlement, cloud connectivity, backend readiness
-skaftor backend list                  # backends you can launch on (id · name · type)
-skaftor up --agent claude             # launch a workstation (returns at once)
-skaftor up --backend <id> --repo bitbucket.org/acme/app --branch feat/x
+skaftor verify                        # preflight: plan entitlement, Skaftor Cloud connection, ready to launch
+skaftor up --agent claude             # launch a workstation on Skaftor Cloud (returns at once)
+skaftor up --repo bitbucket.org/acme/app --branch feat/x
 skaftor ws                            # your workstations and their status
 skaftor ssh <name>                    # interactive shell (^D to exit)
 skaftor stop <name>  ·  skaftor start <name>

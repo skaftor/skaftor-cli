@@ -38,11 +38,12 @@ test("ws / ws list → list_workstations", () => {
   assert.deepEqual(wsToolArgs("ws", ["list"]), { tool: "list_workstations", args: {} });
 });
 
-test("up maps every flag; name optional; unknown flags ignored", () => {
-  assert.deepEqual(wsToolArgs("up", ["--backend", "b1", "--repo", "bitbucket.org/x/y", "--branch", "feat/z", "--agent", "claude"]), {
-    tool: "launch_workstation", args: { backend: "b1", repoUrl: "bitbucket.org/x/y", branch: "feat/z", agent: "claude" },
+test("up maps repo/branch/agent; name optional; --backend and unknown flags are ignored (infra is the plan's, not ours)", () => {
+  assert.deepEqual(wsToolArgs("up", ["--repo", "bitbucket.org/x/y", "--branch", "feat/z", "--agent", "claude"]), {
+    tool: "launch_workstation", args: { repoUrl: "bitbucket.org/x/y", branch: "feat/z", agent: "claude" },
   });
   assert.deepEqual(wsToolArgs("up", ["my-ws", "--agent=codex"]), { tool: "launch_workstation", args: { name: "my-ws", agent: "codex" } });
+  assert.deepEqual(wsToolArgs("up", ["--backend", "b1"]), { tool: "launch_workstation", args: {} });
   assert.deepEqual(wsToolArgs("launch", []), { tool: "launch_workstation", args: {} });
 });
 
@@ -53,16 +54,13 @@ test("start / stop / rm → transition_workstation with the right action; rm is 
   for (const c of ["start", "stop", "rm", "ssh"]) assert.throws(() => wsToolArgs(c, []), /usage/);
 });
 
-test("ssh → open_workstation_shell; verify / backend → the preflight and backend tools", () => {
+test("ssh → open_workstation_shell; verify → the preflight tool; no backend command exists for developers", () => {
   assert.deepEqual(wsToolArgs("ssh", ["ws-bob-1"]), { tool: "open_workstation_shell", args: { name: "ws-bob-1" } });
   assert.deepEqual(wsToolArgs("verify", []), { tool: "verify_workstation_access", args: {} });
-  assert.deepEqual(wsToolArgs("verify", ["--backend", "b1"]), { tool: "verify_workstation_access", args: { backend: "b1" } });
-  assert.deepEqual(wsToolArgs("backend", ["list"]), { tool: "list_backends", args: {} });
-  assert.deepEqual(wsToolArgs("backend", []), { tool: "list_backends", args: {} });
-  assert.deepEqual(wsToolArgs("backend", ["verify", "b1"]), { tool: "verify_workstation_access", args: { backend: "b1" } });
-  assert.deepEqual(wsToolArgs("backend", ["verify"]), { tool: "verify_workstation_access", args: {} });
-  assert.throws(() => wsToolArgs("backend", ["frobnicate"]), /usage/);
+  assert.deepEqual(wsToolArgs("verify", ["--backend", "b1"]), { tool: "verify_workstation_access", args: {} });
+  assert.throws(() => wsToolArgs("backend", ["list"]), /unknown/);
   assert.throws(() => wsToolArgs("nonsense", []), /unknown/);
+  assert.ok(!WORKSTATION_COMMANDS.includes("backend"), "backend is not a developer command");
 });
 
 test("every workstation command has a usage line", () => {

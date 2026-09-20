@@ -13,19 +13,20 @@ import https from "node:https";
 import crypto from "node:crypto";
 
 // ── commands, usage, help ──────────────────────────────────────────────────────
-export const WORKSTATION_COMMANDS = ["ws", "up", "ssh", "start", "stop", "rm", "verify", "backend"];
+// Infrastructure is Skaftor's business: where a workstation runs is decided by your organisation's plan,
+// so there is no backend to list or pick — `up` just launches on Skaftor Cloud.
+export const WORKSTATION_COMMANDS = ["ws", "up", "ssh", "start", "stop", "rm", "verify"];
 
 const USAGE = {
   ws: "skaftor ws                                    List my managed workstations and their status",
   up:
-    "skaftor up [name] [--backend <id>] [--repo <url>] [--branch <b>] [--agent <a>]\n" +
-    "                                              Launch a managed workstation for me — returns at once; track it with `skaftor ws`",
+    "skaftor up [name] [--repo <url>] [--branch <b>] [--agent <a>]\n" +
+    "                                              Launch a managed workstation for me on Skaftor Cloud — returns at once; track it with `skaftor ws`",
   ssh: "skaftor ssh <name>                            Open an interactive shell in my running workstation (^D to exit)",
   start: "skaftor start <name>                          Power my workstation on",
   stop: "skaftor stop <name>                           Power my workstation off — the home volume is kept",
   rm: "skaftor rm <name> [--yes]                     Delete my workstation and its home volume (asks first unless --yes)",
-  verify: "skaftor verify [--backend <id>]               Preflight: am I entitled, is the platform connected to the workstation cloud, is the backend ready",
-  backend: "skaftor backend list | verify [<id>]          Backends I can launch on (id · name · type) / check one's launch connectivity",
+  verify: "skaftor verify                                Preflight: plan entitlement · Skaftor Cloud connection · ready to launch",
 };
 
 /** One-line usage for a workstation command — also what `skaftor <cmd> --help` prints. */
@@ -74,19 +75,14 @@ export function wsToolArgs(cmd, argv = []) {
     case "ws": case "list":
       return { tool: "list_workstations", args: {} };
     case "up": case "launch":
-      return { tool: "launch_workstation", args: pick({ name: str(_[0]), backend: str(flags.backend), repoUrl: str(flags.repo), branch: str(flags.branch), agent: str(flags.agent) }) };
+      // A `--backend` flag (pre-0.2.1) is ignored: infrastructure is chosen by the plan, on the server.
+      return { tool: "launch_workstation", args: pick({ name: str(_[0]), repoUrl: str(flags.repo), branch: str(flags.branch), agent: str(flags.agent) }) };
     case "start": case "stop": case "rm":
       return { tool: "transition_workstation", args: { name: need(cmd, str(_[0]), "workstation name"), action: cmd === "rm" ? "delete" : cmd } };
     case "ssh":
       return { tool: "open_workstation_shell", args: { name: need(cmd, str(_[0]), "workstation name") } };
     case "verify":
-      return { tool: "verify_workstation_access", args: pick({ backend: str(flags.backend) }) };
-    case "backend": {
-      const sub = _[0];
-      if (!sub || sub === "list" || sub === "ls") return { tool: "list_backends", args: {} };
-      if (sub === "verify") return { tool: "verify_workstation_access", args: pick({ backend: str(_[1]) || str(flags.backend) }) };
-      throw new Error(`${usageFor("backend")}\nunknown backend command "${sub}"`);
-    }
+      return { tool: "verify_workstation_access", args: {} };
     default:
       throw new Error(`unknown workstation command "${cmd}"`);
   }
