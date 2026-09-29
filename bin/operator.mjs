@@ -237,6 +237,12 @@ export function installValues(state, flags) {
   if (state.store === "gcp") v.secrets = { externalSecrets: { enabled: true, storeRef: { name: asStr(flags["secret-store"], "--secret-store (the External Secrets store for your Secret Manager)") } } };
   if (flags.host) v.ingress = { enabled: true, host: String(flags.host), tlsSecretName: asStr(flags["tls-secret"], "--tls-secret (browsers reach the Operator over TLS only)"), ...(flags["ingress-class"] ? { className: String(flags["ingress-class"]) } : {}) };
   if (flags.gsa) v.serviceAccount = { worker: { annotations: { "iam.gke.io/gcp-service-account": String(flags.gsa) } } };
+  // Workstations: the customer's own engine (skaftor-cloud's GKE kit) in the same cluster; its token is in the Secret.
+  if (flags["workstations-url"]) {
+    const u = String(flags["workstations-url"]);
+    if (!/^https?:\/\/[^\s/]+(:\d+)?\/?$/.test(u)) throw new Error("--workstations-url must be the engine's address, e.g. http://skaftor-cloud.skaftor:3112");
+    v.workstations = { url: u.replace(/\/+$/, "") };
+  }
   return v;
 }
 
@@ -253,6 +259,7 @@ export async function preflight(d, state, flags) {
   }
   if (state.store === "k8s") {
     const keys = Object.keys(await d.readSecretKeys(d, { ...flags, namespace: state.namespace }));
+    if (flags["workstations-url"] && !keys.includes("WORKSTATIONS_TOKEN") && !d.env.SKAFTOR_WORKSTATIONS_TOKEN) problems.push("workstations need the engine's service token: set SKAFTOR_WORKSTATIONS_TOKEN in your shell for this command (it goes into the Secret, never on a command line)");
     const need = ["SKAFTOR_OPERATOR_KEY", "CRED_ENC_KEY", flags.postgres === "trial" ? "POSTGRES_PASSWORD" : "DATABASE_URL"];
     const missing = need.filter((x) => !keys.includes(x));
     if (missing.length) problems.push(`the Secret ${SECRET_NAME} in ${state.namespace} lacks ${missing.join(", ")}${missing.includes("DATABASE_URL") ? " (add your database's address, or use --postgres trial)" : " (run skaftor operator enroll)"}`);
@@ -274,6 +281,11 @@ export async function install(d, flags) {
   const version = chartVersionArgs(flags, state);
   const problems = await preflight(d, state, flags);
   if (problems.length) throw new Error(`cannot install:\n  - ${problems.join("\n  - ")}`);
+  // The engine's token, from the shell into the Secret (merged with what is there — never on a command line).
+  if (flags["workstations-url"] && d.env.SKAFTOR_WORKSTATIONS_TOKEN && state.store === "k8s") {
+    const existing = await d.readSecretKeys(d, { ...flags, namespace: state.namespace });
+    await d.writeSecrets(d, { ...flags, namespace: state.namespace }, { ...existing, WORKSTATIONS_TOKEN: d.env.SKAFTOR_WORKSTATIONS_TOKEN });
+  }
   await d.withValuesFile(values, (file) => d.exec("helm", ["upgrade", "--install", state.release, chartOf(flags), ...version, ...clusterFlags(flags, "helm"), "-n", state.namespace, "-f", file, "--wait", "--timeout", String(flags.timeout || "10m")]));
   const saved = { ...state, pending: false, ...(version[1] ? { chartVersion: version[1] } : {}) };
   d.saveState(saved);
@@ -321,6 +333,7 @@ function asStr(v, name) {
 export function realDeps() {
   return {
     exec: realExec,
+    env: process.env,
     withValuesFile: realWithValuesFile,
     fetch: (...a) => fetch(...a),
     keyPair: () => generateKeyPairSync("ed25519"),
@@ -337,6 +350,7 @@ export const operatorHelp = (bold) => `${bold("OPERATOR (BYOC)")}   — your own
   operator enroll <code> --address <https-url> [--store k8s|gcp --project p] [--cloud url] [--namespace n]
                            Make the Operator's key, register it with Skaftor Cloud, keep its secrets with you
   operator install --tag <version> --chart-version <v> [--postgres trial] [--host h --tls-secret s] [--gsa sa]
+                   [--workstations-url <engine address>]  (its token: SKAFTOR_WORKSTATIONS_TOKEN in your shell)
                            Install the Operator (Helm) after enrolling
   operator upgrade --tag <version> [--chart-version <v>]   Move to another platform version
   operator status                    What is running`;

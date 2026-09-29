@@ -59,6 +59,7 @@ function fakes({ existing = {}, installed = null, enrollAnswer = { operatorId: "
     keyPair: () => generateKeyPairSync("ed25519"),
     random: (n) => "r".repeat(n),
     sleep: async () => {},
+    env: {},
     loadState: () => d.state,
     saveState: (s) => { d.state = s; },
     readSecretKeys, writeSecrets,
@@ -260,4 +261,18 @@ test("upgrade: a bad invocation is refused before anything runs (no rollback adv
   await assert.rejects(upgrade(d, CTX), /--tag/);
   await assert.rejects(upgrade(d, { "kube-context": "other", tag: "v" }), /SKAFTOR_OPERATOR_STATE/);
   assert.equal(d.calls.filter((c) => c.cmd === "helm").length, 0);
+});
+
+test("workstations: the engine's address as a value; its token from the shell into the Secret, never on a command line", async () => {
+  const v = installValues(STATE, { ...CTX, tag: "t", "workstations-url": "http://skaftor-cloud.skaftor:3112/" });
+  assert.deepEqual(v.workstations, { url: "http://skaftor-cloud.skaftor:3112" });
+  assert.throws(() => installValues(STATE, { ...CTX, tag: "t", "workstations-url": "not a url" }), /engine's address/);
+  const noToken = fakes({ existing: { SKAFTOR_OPERATOR_KEY: "k", CRED_ENC_KEY: "c", POSTGRES_PASSWORD: "p" }, state: STATE });
+  await assert.rejects(install(noToken, { ...LOCAL, tag: "t", postgres: "trial", "workstations-url": "http://ws:3112" }), /SKAFTOR_WORKSTATIONS_TOKEN/);
+  const d = fakes({ existing: { SKAFTOR_OPERATOR_KEY: "k", CRED_ENC_KEY: "c", POSTGRES_PASSWORD: "p" }, state: STATE });
+  d.env = { SKAFTOR_WORKSTATIONS_TOKEN: "ws-secret-token" };
+  await install(d, { ...LOCAL, tag: "t", postgres: "trial", "workstations-url": "http://ws:3112" });
+  assert.equal(d.secret.WORKSTATIONS_TOKEN, "ws-secret-token");
+  assert.equal(d.secret.CRED_ENC_KEY, "c", "…merged: nothing already in the Secret is lost");
+  assert.ok(!argvOf(d).includes("ws-secret-token"), "…never on a command line");
 });
