@@ -97,6 +97,26 @@ it checks your organisation's entitlement and that the workstation is yours; the
 it at ~45 min. If your organisation loses the feature, the renewal is refused and the
 session ends at expiry. Your own login session simply re-authenticates after 24 h idle.
 
+## Operator (BYOC)
+
+Run your organisation's data plane — content, credentials, runs — in your own Kubernetes cluster, with Skaftor Cloud
+keeping sign-in, billing and orchestration. You need `helm` and `kubectl` (and `gcloud` for Secret Manager).
+
+```sh
+# 1. An Admin gets a one-time code in Settings → Operator
+skaftor operator enroll <code> --address https://operator.example.com --kube-context my-cluster
+# 2. Install (the version comes from Skaftor)
+skaftor operator install --tag <version> --kube-context my-cluster \
+  --host operator.example.com --tls-secret operator-tls --gsa skaftor-operator@my-project.iam.gserviceaccount.com
+# Later
+skaftor operator upgrade --tag <version> --kube-context my-cluster
+skaftor operator status --kube-context my-cluster
+```
+
+Always name the cluster (`--kube-context` or `--kubeconfig`): the CLI never uses whichever context happens to be
+current. The Operator's key and credentials key stay with you — in a Kubernetes Secret, or with `--store gcp --project
+<p>` in your Secret Manager (install then needs `--secret-store`, your External Secrets store).
+
 ## How it works
 
 The CLI speaks **JSON-RPC 2.0** to your project's MCP server at
