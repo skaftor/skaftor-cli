@@ -263,16 +263,25 @@ test("upgrade: a bad invocation is refused before anything runs (no rollback adv
   assert.equal(d.calls.filter((c) => c.cmd === "helm").length, 0);
 });
 
-test("workstations: the engine's address as a value; its token from the shell into the Secret, never on a command line", async () => {
-  const v = installValues(STATE, { ...CTX, tag: "t", "workstations-url": "http://skaftor-cloud.skaftor:3112/" });
-  assert.deepEqual(v.workstations, { url: "http://skaftor-cloud.skaftor:3112" });
+test("workstations: the engine's address as a value; its token from the shell, only that key under its own field manager", async () => {
+  const v = installValues(STATE, { ...CTX, tag: "t", "workstations-url": "http://skaftor-cloud.skaftor:3112/", "workstations-public-url": "https://ws.example.com" });
+  assert.deepEqual(v.workstations, { url: "http://skaftor-cloud.skaftor:3112", publicUrl: "https://ws.example.com" });
   assert.throws(() => installValues(STATE, { ...CTX, tag: "t", "workstations-url": "not a url" }), /engine's address/);
+  assert.throws(() => installValues(STATE, { ...CTX, tag: "t", "workstations-url": "http://e:3112", "workstations-public-url": "http://ws.example.com" }), /must be https/);
+  assert.deepEqual(installValues({ ...STATE, workstationsUrl: "http://e:3112" }, { ...CTX, tag: "t" }).workstations, { url: "http://e:3112" }, "installing again without the flag keeps it (remembered — review)");
   const noToken = fakes({ existing: { SKAFTOR_OPERATOR_KEY: "k", CRED_ENC_KEY: "c", POSTGRES_PASSWORD: "p" }, state: STATE });
   await assert.rejects(install(noToken, { ...LOCAL, tag: "t", postgres: "trial", "workstations-url": "http://ws:3112" }), /SKAFTOR_WORKSTATIONS_TOKEN/);
   const d = fakes({ existing: { SKAFTOR_OPERATOR_KEY: "k", CRED_ENC_KEY: "c", POSTGRES_PASSWORD: "p" }, state: STATE });
   d.env = { SKAFTOR_WORKSTATIONS_TOKEN: "ws-secret-token" };
   await install(d, { ...LOCAL, tag: "t", postgres: "trial", "workstations-url": "http://ws:3112" });
+  const apply = d.calls.filter((c) => c.args?.includes("apply")).pop();
+  assert.ok(apply.args.includes("--field-manager=skaftor-cli-workstations"), "its own field manager");
+  assert.deepEqual(Object.keys(JSON.parse(apply.input).data), ["WORKSTATIONS_TOKEN"], "…applying only that key: a later enroll can't remove it, and it takes no other key (review)");
   assert.equal(d.secret.WORKSTATIONS_TOKEN, "ws-secret-token");
-  assert.equal(d.secret.CRED_ENC_KEY, "c", "…merged: nothing already in the Secret is lost");
   assert.ok(!argvOf(d).includes("ws-secret-token"), "…never on a command line");
+  assert.equal(d.state.workstationsUrl, "http://ws:3112", "remembered for the next install");
+  const g = fakes({ state: { ...STATE, store: "gcp", project: "p" } });
+  g.env = { SKAFTOR_WORKSTATIONS_TOKEN: "ws-gcp" };
+  await install(g, { ...LOCAL, tag: "t", "secret-store": "s", "workstations-url": "http://ws:3112" }).catch(() => {});
+  assert.ok(g.calls.some((c) => c.cmd === "gcloud" && c.args.includes("skaftor-operator-workstations-token") && c.input === "ws-gcp"), "with Secret Manager: the token goes there (the chart's ExternalSecret reads it — review)");
 });

@@ -92,7 +92,7 @@ export function checkSameCluster(state, flags) {
 // Secrets). Both read what is there first: the credentials key and the database password are kept across a
 // re-enrolment. Only "not found" counts as absent — a read that fails otherwise stops everything, or a new credentials
 // key would replace the one every stored credential is encrypted under (review of 5c).
-const GCP_NAMES = { SKAFTOR_OPERATOR_KEY: "skaftor-operator-key", CRED_ENC_KEY: "skaftor-operator-cred-enc-key", POSTGRES_PASSWORD: "skaftor-operator-postgres-password" };
+const GCP_NAMES = { SKAFTOR_OPERATOR_KEY: "skaftor-operator-key", CRED_ENC_KEY: "skaftor-operator-cred-enc-key", POSTGRES_PASSWORD: "skaftor-operator-postgres-password", WORKSTATIONS_TOKEN: "skaftor-operator-workstations-token" };
 
 export async function readSecretKeys(d, flags) {
   if (flags.store === "gcp") {
@@ -114,7 +114,7 @@ export async function readSecretKeys(d, flags) {
   return Object.fromEntries(Object.entries(data).map(([k, v]) => [k, Buffer.from(String(v), "base64").toString("utf8")]));
 }
 
-export async function writeSecrets(d, flags, values) {
+export async function writeSecrets(d, flags, values, opts = {}) {
   if (flags.store === "gcp") {
     const project = asStr(flags.project, "--project");
     for (const [k, v] of Object.entries(values)) {
@@ -138,7 +138,9 @@ export async function writeSecrets(d, flags, values) {
   };
   // Server-side apply: no last-applied annotation holding a second copy of the key (review of 5c); keys another tool
   // set (a DATABASE_URL added by hand) stay theirs.
-  await d.exec("kubectl", [...k, "apply", "--server-side", "--field-manager=skaftor-cli", "--force-conflicts", "-f", "-"], { input: JSON.stringify(manifest) });
+  // Each writer owns only its own keys (review): a field manager that re-applied every key would take them all, and its
+  // next apply without them would delete them.
+  await d.exec("kubectl", [...k, "apply", "--server-side", `--field-manager=${opts.fieldManager || "skaftor-cli"}`, "--force-conflicts", "-f", "-"], { input: JSON.stringify(manifest) });
   // A Secret an older CLI applied client-side still carries that copy: removed.
   await d.exec("kubectl", [...k, "-n", ns(flags), "annotate", "secret", SECRET_NAME, "kubectl.kubernetes.io/last-applied-configuration-"], { allowFail: true });
 }
@@ -238,10 +240,14 @@ export function installValues(state, flags) {
   if (flags.host) v.ingress = { enabled: true, host: String(flags.host), tlsSecretName: asStr(flags["tls-secret"], "--tls-secret (browsers reach the Operator over TLS only)"), ...(flags["ingress-class"] ? { className: String(flags["ingress-class"]) } : {}) };
   if (flags.gsa) v.serviceAccount = { worker: { annotations: { "iam.gke.io/gcp-service-account": String(flags.gsa) } } };
   // Workstations: the customer's own engine (skaftor-cloud's GKE kit) in the same cluster; its token is in the Secret.
-  if (flags["workstations-url"]) {
-    const u = String(flags["workstations-url"]);
+  // Remembered in the state, so installing again without the flags keeps them (review).
+  const wsUrl = flags["workstations-url"] ?? state.workstationsUrl;
+  const wsPublic = flags["workstations-public-url"] ?? state.workstationsPublicUrl;
+  if (wsUrl) {
+    const u = String(wsUrl);
     if (!/^https?:\/\/[^\s/]+(:\d+)?\/?$/.test(u)) throw new Error("--workstations-url must be the engine's address, e.g. http://skaftor-cloud.skaftor:3112");
-    v.workstations = { url: u.replace(/\/+$/, "") };
+    if (wsPublic && !/^https:\/\/[^\s/]+(:\d+)?\/?$/.test(String(wsPublic))) throw new Error("--workstations-public-url must be https (developers' terminals connect there with a credential)");
+    v.workstations = { url: u.replace(/\/+$/, ""), ...(wsPublic ? { publicUrl: String(wsPublic).replace(/\/+$/, "") } : {}) };
   }
   return v;
 }
@@ -257,9 +263,13 @@ export async function preflight(d, state, flags) {
     const r = await d.exec("kubectl", [...k, "auth", "can-i", verb, res, "-n", state.namespace], { allowFail: true });
     if (r.out.trim() !== "yes") problems.push(`you cannot ${verb} ${res} in namespace ${state.namespace}`);
   }
+  const wantsWs = !!(flags["workstations-url"] ?? state.workstationsUrl);
+  if (wantsWs && !d.env.SKAFTOR_WORKSTATIONS_TOKEN) {
+    const have = Object.keys(await d.readSecretKeys(d, { ...flags, namespace: state.namespace, store: state.store, project: state.project }));
+    if (!have.includes("WORKSTATIONS_TOKEN")) problems.push("workstations need the engine's service token: set SKAFTOR_WORKSTATIONS_TOKEN in your shell for this command (it goes into your secrets, never on a command line)");
+  }
   if (state.store === "k8s") {
     const keys = Object.keys(await d.readSecretKeys(d, { ...flags, namespace: state.namespace }));
-    if (flags["workstations-url"] && !keys.includes("WORKSTATIONS_TOKEN") && !d.env.SKAFTOR_WORKSTATIONS_TOKEN) problems.push("workstations need the engine's service token: set SKAFTOR_WORKSTATIONS_TOKEN in your shell for this command (it goes into the Secret, never on a command line)");
     const need = ["SKAFTOR_OPERATOR_KEY", "CRED_ENC_KEY", flags.postgres === "trial" ? "POSTGRES_PASSWORD" : "DATABASE_URL"];
     const missing = need.filter((x) => !keys.includes(x));
     if (missing.length) problems.push(`the Secret ${SECRET_NAME} in ${state.namespace} lacks ${missing.join(", ")}${missing.includes("DATABASE_URL") ? " (add your database's address, or use --postgres trial)" : " (run skaftor operator enroll)"}`);
@@ -281,13 +291,13 @@ export async function install(d, flags) {
   const version = chartVersionArgs(flags, state);
   const problems = await preflight(d, state, flags);
   if (problems.length) throw new Error(`cannot install:\n  - ${problems.join("\n  - ")}`);
-  // The engine's token, from the shell into the Secret (merged with what is there — never on a command line).
-  if (flags["workstations-url"] && d.env.SKAFTOR_WORKSTATIONS_TOKEN && state.store === "k8s") {
-    const existing = await d.readSecretKeys(d, { ...flags, namespace: state.namespace });
-    await d.writeSecrets(d, { ...flags, namespace: state.namespace }, { ...existing, WORKSTATIONS_TOKEN: d.env.SKAFTOR_WORKSTATIONS_TOKEN });
+  // The engine's token, from the shell into the org's secrets — only that key, under its own field manager (review),
+  // in the Kubernetes Secret or Secret Manager alike; never on a command line.
+  if (wantsWsToken(flags, state) && d.env.SKAFTOR_WORKSTATIONS_TOKEN) {
+    await d.writeSecrets(d, { ...flags, namespace: state.namespace, store: state.store, project: state.project }, { WORKSTATIONS_TOKEN: d.env.SKAFTOR_WORKSTATIONS_TOKEN }, { fieldManager: "skaftor-cli-workstations" });
   }
   await d.withValuesFile(values, (file) => d.exec("helm", ["upgrade", "--install", state.release, chartOf(flags), ...version, ...clusterFlags(flags, "helm"), "-n", state.namespace, "-f", file, "--wait", "--timeout", String(flags.timeout || "10m")]));
-  const saved = { ...state, pending: false, ...(version[1] ? { chartVersion: version[1] } : {}) };
+  const saved = { ...state, pending: false, ...(version[1] ? { chartVersion: version[1] } : {}), ...(values.workstations ? { workstationsUrl: values.workstations.url, ...(values.workstations.publicUrl ? { workstationsPublicUrl: values.workstations.publicUrl } : {}) } : {}) };
   d.saveState(saved);
   return saved;
 }
@@ -325,6 +335,8 @@ export async function status(d, flags) {
   return { state, pods: pods.out.trim(), release: rel.out.split("\n").filter((l) => /^(STATUS|REVISION|LAST DEPLOYED):/.test(l)).join("\n") };
 }
 
+function wantsWsToken(flags, state) { return !!(flags["workstations-url"] ?? state.workstationsUrl); }
+
 function asStr(v, name) {
   if (typeof v !== "string" || !v) throw new Error(`missing ${name}`);
   return v;
@@ -350,7 +362,7 @@ export const operatorHelp = (bold) => `${bold("OPERATOR (BYOC)")}   — your own
   operator enroll <code> --address <https-url> [--store k8s|gcp --project p] [--cloud url] [--namespace n]
                            Make the Operator's key, register it with Skaftor Cloud, keep its secrets with you
   operator install --tag <version> --chart-version <v> [--postgres trial] [--host h --tls-secret s] [--gsa sa]
-                   [--workstations-url <engine address>]  (its token: SKAFTOR_WORKSTATIONS_TOKEN in your shell)
+                   [--workstations-url <in-cluster engine> --workstations-public-url <https>]  (token: SKAFTOR_WORKSTATIONS_TOKEN)
                            Install the Operator (Helm) after enrolling
   operator upgrade --tag <version> [--chart-version <v>]   Move to another platform version
   operator status                    What is running`;
