@@ -20,7 +20,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
 export const DEFAULT_CLOUD = "https://app.skaftor.com";
-export const DEFAULT_CHART = "oci://us-central1-docker.pkg.dev/skaftorai/charts/skaftor-operator";
+export const DEFAULT_CHART = "oci://us-central1-docker.pkg.dev/skaftorai-502111/operator/skaftor-operator";
 export const SECRET_NAME = "skaftor-operator";
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 // Who the Operator is and where it lives (nothing secret). SKAFTOR_OPERATOR_STATE points elsewhere (a second Operator).
