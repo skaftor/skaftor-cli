@@ -174,6 +174,8 @@ export async function enroll(d, code, flags) {
   try { addr = new URL(address); } catch { throw new Error("--address must be a URL"); }
   if (addr.protocol !== "https:" && !["localhost", "127.0.0.1"].includes(addr.hostname)) throw new Error("--address must be https (browsers reach the Operator directly)");
   const cloud = String(flags.cloud || DEFAULT_CLOUD).replace(/\/+$/, "");
+  // Skaftor Cloud's keys verify every token: https only (localhost excepted, for a developer's machine — security review).
+  if (!isSecureCloud(cloud)) throw new Error("--cloud must be https (Skaftor Cloud's keys verify every token)");
   clusterFlags(flags, "kubectl"); // the cluster is named before anything is made
   const prev = d.loadState();
   if (prev) checkSameCluster(prev, flags);
@@ -231,7 +233,7 @@ function chartVersionArgs(flags, state) {
 /** The chart values for an install — no secret among them (they come from the Secret / Secret Manager). */
 export function installValues(state, flags) {
   const tag = asStr(flags.tag, "--tag (the platform version to run)");
-  const v = { image: { tag }, operator: { cloudUrl: state.cloud, id: state.operatorId, orgId: state.orgId, address: state.address } };
+  const v = { image: { tag }, operator: { cloudUrl: state.cloud, id: state.operatorId, orgId: state.orgId, address: state.address, ...(/^http:/.test(state.cloud) && isSecureCloud(state.cloud) ? { allowInsecureCloudUrl: true } : {}) } };
   if (flags.image) v.image.repository = String(flags.image);
   if (flags["pull-policy"]) v.image.pullPolicy = String(flags["pull-policy"]);
   if (flags["pull-secret"]) v.image.pullSecrets = [String(flags["pull-secret"])];
@@ -333,6 +335,13 @@ export async function status(d, flags) {
   const pods = await d.exec("kubectl", [...k, "-n", state.namespace, "get", "pods", "-l", "app.kubernetes.io/name=skaftor-operator", "-o", "wide"], { allowFail: true });
   const rel = await d.exec("helm", ["status", state.release, ...clusterFlags(flags, "helm"), "-n", state.namespace], { allowFail: true });
   return { state, pods: pods.out.trim(), release: rel.out.split("\n").filter((l) => /^(STATUS|REVISION|LAST DEPLOYED):/.test(l)).join("\n") };
+}
+
+export function isSecureCloud(url) {
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" || (u.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]", "host.docker.internal"].includes(u.hostname));
+  } catch { return false; }
 }
 
 function wantsWsToken(flags, state) { return !!(flags["workstations-url"] ?? state.workstationsUrl); }

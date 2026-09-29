@@ -285,3 +285,12 @@ test("workstations: the engine's address as a value; its token from the shell, o
   await install(g, { ...LOCAL, tag: "t", "secret-store": "s", "workstations-url": "http://ws:3112" }).catch(() => {});
   assert.ok(g.calls.some((c) => c.cmd === "gcloud" && c.args.includes("skaftor-operator-workstations-token") && c.input === "ws-gcp"), "with Secret Manager: the token goes there (the chart's ExternalSecret reads it — review)");
 });
+
+test("Skaftor Cloud's address is https (localhost excepted): its keys verify every token (security review)", async () => {
+  await assert.rejects(enroll(fakes(), "CODE", { ...CTX, cloud: "http://cloud.example.com", address: "https://op.example.com" }), /--cloud must be https/);
+  const d = fakes();
+  await enroll(d, "CODE", { ...CTX, cloud: "http://localhost:3200", address: "https://op.example.com" });
+  assert.equal(d.state.cloud, "http://localhost:3200");
+  assert.equal(installValues({ ...STATE, cloud: "http://localhost:3200" }, { ...CTX, tag: "t" }).operator.allowInsecureCloudUrl, true, "a local test cluster is allowed its http Skaftor Cloud");
+  assert.equal(installValues(STATE, { ...CTX, tag: "t" }).operator.allowInsecureCloudUrl, undefined, "…a real one never is");
+});
