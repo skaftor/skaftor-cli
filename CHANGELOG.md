@@ -6,6 +6,19 @@ All notable changes to the Skaftor CLI are documented here. The format is based 
 
 ## [Unreleased]
 
+### Added
+- **`skaftor operator` — run a Skaftor Operator (BYOC) in your own cluster.**
+  - `enroll <code>`: makes the Operator's key and registers it with Skaftor Cloud using a one-time code.
+    - Keeps the secrets with you: a Kubernetes Secret, or your Google Secret Manager with `--store gcp`.
+    - Re-enrolling keeps the credentials key and moves an installed Operator onto the new enrolment.
+  - `install`: installs the Helm chart once the tools, your rights and the Secret check out.
+  - `upgrade --tag`: moves to another platform version. A schema change that would drop data stops there, and the CLI
+    shows why and how to roll back.
+  - `status`: shows what is running.
+  - Every command names its cluster context (`--kube-context`); no current context is ever assumed.
+  - Secrets travel on stdin, never on a command line. Chart values go in a values file, never as `--set` strings.
+  - Registry charts are pinned (`--chart-version`).
+
 ## [0.2.2] - 2026-09-11
 
 ### Added

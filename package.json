@@ -18,7 +18,7 @@
   "scripts": {
     "test": "node --test test/",
     "smoke": "node bin/skaftor.mjs --version && node bin/skaftor.mjs help >/dev/null",
-    "lint": "node --check bin/skaftor.mjs && node --check bin/ws.mjs"
+    "lint": "node --check bin/skaftor.mjs && node --check bin/ws.mjs && node --check bin/operator.mjs"
   },
   "keywords": [
     "skaftor",

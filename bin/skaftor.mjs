@@ -12,6 +12,7 @@ import { homedir, platform, release } from "node:os";
 import { join } from "node:path";
 import readline from "node:readline";
 import { wsToolArgs, usageFor, parsePtyBlock, ptyDescFromUrl, refreshDelay, wsConnect, workstationHelp } from "./ws.mjs";
+import { runOperator, operatorHelp } from "./operator.mjs";
 
 const CONFIG_DIR = join(homedir(), ".skaftor");
 // The platform CLI's OWN store. The skaftor-cloud operator CLI also lives in ~/.skaftor but writes
@@ -275,6 +276,8 @@ ${bold("WORK ORDERS")}
 
 ${workstationHelp(bold)}
 
+${operatorHelp(bold)}
+
 ${bold("DELIVERY")}
   pr <code>                Prepare / open the pull request for a work order
   env [--name --model --editor --os]   Register your working environment
@@ -303,6 +306,11 @@ async function main() {
 
   switch (cmd) {
     // ── auth ────────────────────────────────────────────────────────────────
+    case "operator": {
+      // Runs against the customer's cluster and Skaftor Cloud, not a project's MCP link: no login needed.
+      try { await runOperator(sub, _.slice(1), flags); } catch (e) { die(e.message); }
+      return;
+    }
     case "login":
     case "connect": {
       const url = _[0];
