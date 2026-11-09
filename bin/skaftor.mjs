@@ -13,6 +13,7 @@ import { join } from "node:path";
 import readline from "node:readline";
 import { wsToolArgs, usageFor, parsePtyBlock, ptyDescFromUrl, refreshDelay, wsConnect, workstationHelp } from "./ws.mjs";
 import { runOperator, operatorHelp } from "./operator.mjs";
+import { runRepos, reposHelp } from "./repos.mjs";
 
 const CONFIG_DIR = join(homedir(), ".skaftor");
 // The platform CLI's OWN store. The skaftor-cloud operator CLI also lives in ~/.skaftor but writes
@@ -114,7 +115,10 @@ async function callToolSoft(conn, name, args) {
 const toolText = (result) => (result?.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
 // Print a tools/call result: the text content, or raw JSON with --json.
 function printToolResult(result, json) {
-  if (json) return console.log(JSON.stringify(result, null, 2));
+  if (json) {
+    if (result?.isError) process.exitCode = 1;
+    return console.log(JSON.stringify(result, null, 2));
+  }
   const text = (result?.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
   if (result?.isError) { console.error(red(text || "tool reported an error")); process.exit(1); }
   console.log(text || dim("(no output)"));
@@ -231,6 +235,7 @@ function parseArgs(argv) {
       if (eq > -1) { flags[a.slice(2, eq)] = a.slice(eq + 1); }
       else {
         const key = a.slice(2);
+        if (key === "json" || key === "help") { flags[key] = true; continue; }
         const next = argv[i + 1];
         if (next === undefined || next.startsWith("--")) flags[key] = true;
         else { flags[key] = next; i++; }
@@ -278,6 +283,8 @@ ${workstationHelp(bold)}
 
 ${operatorHelp(bold)}
 
+${reposHelp(bold)}
+
 ${bold("DELIVERY")}
   pr <code>                Prepare / open the pull request for a work order
   env [--name --model --editor --os]   Register your working environment
@@ -305,6 +312,12 @@ async function main() {
   const cfg = loadConfig();
 
   switch (cmd) {
+    case "repos": {
+      if (flags.help || argv.includes("-h") || !sub || sub === "help") { console.log(reposHelp(bold)); return; }
+      try { await runRepos(sub, _.slice(1), flags, { conn: currentConn(cfg), callTool, printToolResult }); }
+      catch (e) { die(e.message); }
+      return;
+    }
     // ── auth ────────────────────────────────────────────────────────────────
     case "operator": {
       // Runs against the customer's cluster and Skaftor Cloud, not a project's MCP link: no login needed.
