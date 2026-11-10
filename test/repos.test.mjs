@@ -68,6 +68,33 @@ test("repos ls maps tier and page, preserving --json and the server pagination r
   assert.deepEqual(h.prints, [{ r: h.result, json: true }]);
 });
 
+test("repos ls maps the server's narrowing filters, so a row past page 100 is reachable", async () => {
+  const h = harness();
+  await runRepos("ls", [], { q: "  Billing-API ", provider: "gitlab", archived: true, stale: "false", tier: "lazy", page: "3" }, h.deps);
+  assert.deepEqual(h.calls, [[h.deps.conn, "repos_list", { tier: "lazy", q: "Billing-API", provider: "gitlab", archived: true, stale: false, page: 3 }]]);
+  const one = harness();
+  await runRepos("ls", [], { archived: "false", stale: true }, one.deps);
+  assert.deepEqual(one.calls[0][2], { archived: false, stale: true });
+});
+
+test("repos ls refuses a filter the server would silently ignore, before any call", async () => {
+  for (const [flags, want] of [
+    [{ q: true }, /--q needs part of a repository name/],
+    [{ q: "   " }, /--q needs part of a repository name/],
+    [{ q: "x".repeat(101) }, /--q needs part of a repository name/],
+    [{ provider: "svn" }, /--provider must be github, gitlab or bitbucket/],
+    [{ provider: true }, /--provider must be/],
+    [{ archived: "yes" }, /--archived takes no value, or true \/ false/],
+    [{ stale: "1" }, /--stale takes no value, or true \/ false/],
+    [{ page: "101" }, /narrow the list with --q/],
+    [{ after: "abc" }, /usage: skaftor repos ls/],
+  ]) {
+    const h = harness();
+    await assert.rejects(runRepos("ls", [], flags, h.deps), want);
+    assert.equal(h.calls.length, 0);
+  }
+});
+
 test("repos track forwards the exact name and renders the server's refusal and nextAction", async () => {
   const h = harness();
   h.result.isError = true;

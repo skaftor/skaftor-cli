@@ -37,6 +37,7 @@ Repository mirrors use the same personal project connection as work orders:
 
 ```bash
 skaftor repos ls --tier lazy --page 1
+skaftor repos ls --q billing --provider gitlab   # narrow a large organisation by name or code host
 skaftor repos track github:my-team/my-service
 ```
 
