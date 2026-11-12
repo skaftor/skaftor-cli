@@ -128,6 +128,16 @@ test("encodeFrame/decodeFrame roundtrip (masked binary), and partial buffers wai
 });
 
 // ---------- (2) spawned CLI: help coverage + per-command --help ----------
+test("repository help is available without login, and running a command requires login", () => {
+  for (const args of [["--help"], ["repos"], ["repos", "ls", "--help"], ["repos", "track", "--help"], ["repos", "-h"]]) {
+    const r = run(args);
+    try { assert.equal(r.code, 0, r.out); assert.match(r.out, /repos ls/); assert.match(r.out, /repos track/); }
+    finally { clean(r); }
+  }
+  const r = run(["repos", "ls"]);
+  try { assert.equal(r.code, 1); assert.match(r.out, /not logged in/); }
+  finally { clean(r); }
+});
 test("skaftor --help lists every workstation command", () => {
   const r = run(["--help"]);
   try {

@@ -33,6 +33,19 @@ in an engineering memory graph. This CLI is the terminal front-end to that workf
 
 ## Install
 
+Repository mirrors use the same personal project connection as work orders:
+
+```bash
+skaftor repos ls --tier lazy --page 1
+skaftor repos ls --q billing --provider gitlab   # narrow a large organisation by name or code host
+skaftor repos track github:my-team/my-service
+```
+
+Listings return up to 50 repositories per page; use the response's `more` field
+and `--page` (1–100) to continue. `--json` preserves the MCP response, including
+refusal reasons and `nextAction`. Refusals exit with status 1. The platform
+checks your permissions, repository scope and organisation storage allowance.
+
 Needs **Node.js 18+**. No other dependencies.
 
 ```bash
