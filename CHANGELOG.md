@@ -7,6 +7,14 @@ All notable changes to the Skaftor CLI are documented here. The format is based 
 ## [Unreleased]
 
 ### Added
+- **`skaftor call --json '<object>'`** passes the whole arguments object, so a tool that takes nested objects or
+  arrays of objects can be called. `--key value` flags add keys to it (a key given both ways is refused); a bare
+  `--json` still prints the raw JSON result.
+
+### Fixed
+- `skaftor up <name>` no longer warns that a custom name isn't listed or ssh-able: the platform attributes it.
+- The help and the "not logged in" error say where the app shows the login command now:
+  Settings › Workstations › "From your terminal".
 - **`skaftor operator` — run a Skaftor Operator (BYOC) in your own cluster.**
   - `enroll <code>`: makes the Operator's key and registers it with Skaftor Cloud using a one-time code.
     - Keeps the secrets with you: a Kubernetes Secret, or your Google Secret Manager with `--store gcp`.

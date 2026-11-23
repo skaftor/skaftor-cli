@@ -58,8 +58,8 @@ npm install -g skaftor
 
 ## Connect
 
-Get your **personal MCP link** from the app: open a project → a work order →
-_"connect your coding agent"_ and copy the URL. Then:
+Get your login command from the app: **Settings › Workstations › "From your terminal" › Log in**,
+and copy it (create your access token there first if you have none). It looks like:
 
 ```bash
 skaftor login "https://app.skaftor.com/api/mcp/<projectId>?dev=<token>"
@@ -130,6 +130,17 @@ Always name the cluster context (`--kube-context`, with `--kubeconfig` if it liv
 uses whichever context happens to be current. One machine keeps one Operator's state (`~/.skaftor/operator.json`,
 nothing secret); for a second, set `SKAFTOR_OPERATOR_STATE` to its own file. The Operator's key and credentials key stay with you — in a Kubernetes Secret, or with `--store gcp --project
 <p>` in your Secret Manager (install then needs `--secret-store`, your External Secrets store).
+
+## Any tool
+
+```bash
+skaftor tools                                            # every tool the server exposes
+skaftor call <tool> --key value                          # numbers stay numbers, a,b becomes a list
+skaftor call <tool> --json '{"items":[{"code":"WO-01"}]}'  # the whole arguments object: nested objects, arrays of objects
+```
+
+`--key value` flags add keys to the `--json` object; a key given both ways is refused. A bare `--json`
+still prints the raw JSON result.
 
 ## How it works
 
