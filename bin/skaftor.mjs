@@ -2,8 +2,10 @@
 // skaftor — command-line client for the skaftor platform.
 //
 // The platform exposes a per-project JSON-RPC 2.0 MCP server at
-// `<origin>/api/mcp/<projectId>?dev=<token>` — the same surface coding agents
-// connect to. This CLI wraps it: you authenticate with the login string the
+// `<origin>/api/mcp/<projectId>` — the same surface coding agents connect to.
+// The token from the login string is sent as `Authorization: Bearer`, never in
+// the URL (servers log request URLs), and only to an https platform (or this
+// machine). This CLI wraps it: you authenticate with the login string the
 // app gives you (Settings › Workstations › "From your terminal"), and drive
 // your work orders from the terminal. Zero dependencies — Node 18+ built-ins only.
 
@@ -21,7 +23,7 @@ const CONFIG_DIR = join(homedir(), ".skaftor");
 // each other. A legacy platform-shaped config.json is migrated once (see loadConfig).
 const CONFIG_FILE = join(CONFIG_DIR, "platform.json");
 const LEGACY_FILE = join(CONFIG_DIR, "config.json");
-const VERSION = "0.2.3";
+const VERSION = "0.2.4";
 
 // ── styling ────────────────────────────────────────────────────────────────
 const tty = process.stdout.isTTY;
@@ -65,10 +67,21 @@ function currentConn(cfg) {
   return conn;
 }
 
-// Parse a personal MCP url → { origin, projectId, token }.
+// The token goes only to an https platform; plain http only to this machine (a developer's local platform).
+const LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
+function requireSecureOrigin(origin) {
+  let u;
+  try { u = new URL(origin); } catch { die(`the platform address ${origin} is not a URL — log in again with the login string from the app`); }
+  if (u.protocol === "https:" || (u.protocol === "http:" && LOCAL_HOSTS.includes(u.hostname))) return;
+  die(`the platform address ${u.origin} is not https — your token is only sent over https (or to this machine). Log in again with the https login string from the app.`);
+}
+
+// Parse a personal MCP url → { origin, projectId, token }. (The login string carries the token as ?dev=; the CLI reads
+// it from there once, stores it, and sends it in the Authorization header.)
 function parseMcpUrl(url) {
   let u;
   try { u = new URL(url); } catch { die("that doesn't look like a URL — paste the full personal MCP link from the app"); }
+  requireSecureOrigin(u.origin);
   const m = u.pathname.match(/\/api\/mcp\/([^/]+)/);
   const token = u.searchParams.get("dev");
   if (!m || !token) die("URL must look like https://app.skaftor.com/api/mcp/<projectId>?dev=<token>");
@@ -78,12 +91,13 @@ function parseMcpUrl(url) {
 // ── JSON-RPC transport ───────────────────────────────────────────────────────
 let RPC_ID = 0;
 async function rpc(conn, method, params, { soft = false } = {}) {
-  const url = `${conn.origin}/api/mcp/${conn.projectId}?dev=${conn.token}`;
+  requireSecureOrigin(conn.origin);
+  const url = `${conn.origin}/api/mcp/${encodeURIComponent(conn.projectId)}`;
   let res;
   try {
     res = await fetch(url, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", authorization: `Bearer ${conn.token}` },
       body: JSON.stringify({ jsonrpc: "2.0", id: ++RPC_ID, method, params }),
     });
   } catch (e) {

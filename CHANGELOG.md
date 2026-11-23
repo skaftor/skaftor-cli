@@ -6,6 +6,12 @@ All notable changes to the Skaftor CLI are documented here. The format is based 
 
 ## [Unreleased]
 
+### Security (0.2.4)
+- The token is sent in the `Authorization: Bearer` header, never in the request URL (servers and proxies log URLs).
+  The login string is unchanged; the CLI reads the token from it once.
+- The token is sent only to an https platform, or to this machine (`localhost`, `127.0.0.1`, `[::1]`) over http. A
+  stored connection to any other http address is refused until you log in again with the https login string.
+
 ### Added
 - **`skaftor call --json '<object>'`** passes the whole arguments object, so a tool that takes nested objects or
   arrays of objects can be called. `--key value` flags add keys to it (a key given both ways is refused); a bare

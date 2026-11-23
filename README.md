@@ -145,7 +145,8 @@ still prints the raw JSON result.
 ## How it works
 
 The CLI speaks **JSON-RPC 2.0** to your project's MCP server at
-`<origin>/api/mcp/<projectId>?dev=<token>` — the identical surface coding agents use.
+`<origin>/api/mcp/<projectId>`, with your token in the `Authorization: Bearer` header (never in the URL), and
+only over https or to this machine — the identical surface coding agents use.
 That means the CLI, Cursor, and Claude Code all see the same work orders, the same
 execution context, and the same governance. Point it at a self-hosted instance with
 `SKAFTOR_URL=https://your-host`.
