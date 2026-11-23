@@ -6,7 +6,21 @@ All notable changes to the Skaftor CLI are documented here. The format is based 
 
 ## [Unreleased]
 
+### Security (0.2.4)
+- The token is sent in the `Authorization: Bearer` header, never in the request URL (servers and proxies log URLs).
+  The login string is unchanged; the CLI reads the token from it once.
+- The token is sent only to an https platform, or to this machine (`localhost`, `127.0.0.1`, `[::1]`) over http. A
+  stored connection to any other http address is refused until you log in again with the https login string.
+
 ### Added
+- **`skaftor call --json '<object>'`** passes the whole arguments object, so a tool that takes nested objects or
+  arrays of objects can be called. `--key value` flags add keys to it (a key given both ways is refused); a bare
+  `--json` still prints the raw JSON result.
+
+### Fixed
+- `skaftor up <name>` no longer warns that a custom name isn't listed or ssh-able: the platform attributes it.
+- The help and the "not logged in" error say where the app shows the login command now:
+  Settings › Workstations › "From your terminal".
 - **`skaftor operator` — run a Skaftor Operator (BYOC) in your own cluster.**
   - `enroll <code>`: makes the Operator's key and registers it with Skaftor Cloud using a one-time code.
     - Keeps the secrets with you: a Kubernetes Secret, or your Google Secret Manager with `--store gcp`.

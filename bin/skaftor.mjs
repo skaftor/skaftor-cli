@@ -2,10 +2,12 @@
 // skaftor — command-line client for the skaftor platform.
 //
 // The platform exposes a per-project JSON-RPC 2.0 MCP server at
-// `<origin>/api/mcp/<projectId>?dev=<token>` — the same surface coding agents
-// connect to. This CLI wraps it: you authenticate with the personal MCP link
-// the app gives you ("connect your coding agent"), and drive your work orders
-// from the terminal. Zero dependencies — Node 18+ built-ins only.
+// `<origin>/api/mcp/<projectId>` — the same surface coding agents connect to.
+// The token from the login string is sent as `Authorization: Bearer`, never in
+// the URL (servers log request URLs), and only to an https platform (or this
+// machine). This CLI wraps it: you authenticate with the login string the
+// app gives you (Settings › Workstations › "From your terminal"), and drive
+// your work orders from the terminal. Zero dependencies — Node 18+ built-ins only.
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, chmodSync } from "node:fs";
 import { homedir, platform, release } from "node:os";
@@ -21,7 +23,7 @@ const CONFIG_DIR = join(homedir(), ".skaftor");
 // each other. A legacy platform-shaped config.json is migrated once (see loadConfig).
 const CONFIG_FILE = join(CONFIG_DIR, "platform.json");
 const LEGACY_FILE = join(CONFIG_DIR, "config.json");
-const VERSION = "0.2.2";
+const VERSION = "0.2.4";
 
 // ── styling ────────────────────────────────────────────────────────────────
 const tty = process.stdout.isTTY;
@@ -32,6 +34,8 @@ const red = (s) => c("31", s);
 const green = (s) => c("32", s);
 const cyan = (s) => c("36", s);
 const die = (msg) => { console.error(red("error: ") + msg); process.exit(1); };
+// Where the app shows a person their `skaftor login "…"` command.
+const WHERE_LOGIN = 'Settings › Workstations › "From your terminal"';
 
 // ── config store ─────────────────────────────────────────────────────────────
 // A platform config is {current, connections}. Anything else (a missing/corrupt file, or the
@@ -59,14 +63,25 @@ function saveConfig(cfg) {
 }
 function currentConn(cfg) {
   const conn = cfg.connections[cfg.current];
-  if (!conn) die("not logged in — run `skaftor login <personal-mcp-url>` (get the URL from the app's \"connect your coding agent\" button)");
+  if (!conn) die(`not logged in — run \`skaftor login "<login string>"\` (copy it from the app: ${WHERE_LOGIN})`);
   return conn;
 }
 
-// Parse a personal MCP url → { origin, projectId, token }.
+// The token goes only to an https platform; plain http only to this machine (a developer's local platform).
+const LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
+function requireSecureOrigin(origin) {
+  let u;
+  try { u = new URL(origin); } catch { die(`the platform address ${origin} is not a URL — log in again with the login string from the app`); }
+  if (u.protocol === "https:" || (u.protocol === "http:" && LOCAL_HOSTS.includes(u.hostname))) return;
+  die(`the platform address ${u.origin} is not https — your token is only sent over https (or to this machine). Log in again with the https login string from the app.`);
+}
+
+// Parse a personal MCP url → { origin, projectId, token }. (The login string carries the token as ?dev=; the CLI reads
+// it from there once, stores it, and sends it in the Authorization header.)
 function parseMcpUrl(url) {
   let u;
   try { u = new URL(url); } catch { die("that doesn't look like a URL — paste the full personal MCP link from the app"); }
+  requireSecureOrigin(u.origin);
   const m = u.pathname.match(/\/api\/mcp\/([^/]+)/);
   const token = u.searchParams.get("dev");
   if (!m || !token) die("URL must look like https://app.skaftor.com/api/mcp/<projectId>?dev=<token>");
@@ -76,12 +91,13 @@ function parseMcpUrl(url) {
 // ── JSON-RPC transport ───────────────────────────────────────────────────────
 let RPC_ID = 0;
 async function rpc(conn, method, params, { soft = false } = {}) {
-  const url = `${conn.origin}/api/mcp/${conn.projectId}?dev=${conn.token}`;
+  requireSecureOrigin(conn.origin);
+  const url = `${conn.origin}/api/mcp/${encodeURIComponent(conn.projectId)}`;
   let res;
   try {
     res = await fetch(url, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", authorization: `Bearer ${conn.token}` },
       body: JSON.stringify({ jsonrpc: "2.0", id: ++RPC_ID, method, params }),
     });
   } catch (e) {
@@ -244,6 +260,27 @@ function parseArgs(argv) {
   }
   return { _, flags };
 }
+// `skaftor call`: `--json '<object>'` (or `--json=<object>`) is the whole arguments object — nested objects and arrays
+// of objects, which `--k v` cannot express. A value that opens with { or [ is that object; a bare `--json` still means
+// "print raw JSON". Returns the object and the argv without it, for parseArgs.
+function splitCallArgs(argv) {
+  const out = [];
+  let text;
+  const take = (t) => { if (text !== undefined) die("give --json '<object>' once"); text = t; };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    const next = argv[i + 1];
+    if (a === "--json" && typeof next === "string" && /^\s*[[{]/.test(next)) { take(next); i++; }
+    else if (a.startsWith("--json=") && /^\s*[[{]/.test(a.slice(7))) take(a.slice(7));
+    else out.push(a);
+  }
+  let object = {};
+  if (text !== undefined) {
+    try { object = JSON.parse(text); } catch (e) { die(`--json is not valid JSON: ${e.message}`); }
+    if (!object || typeof object !== "object" || Array.isArray(object)) die("--json must be a JSON object: the tool's arguments, e.g. --json '{\"code\":\"WO-01\"}'");
+  }
+  return { object, argv: out };
+}
 const asString = (v, name) => { if (v === undefined) die(`missing required argument: ${name}`); return String(v); };
 
 // ── environment detection (for `env` / `done` defaults) ──────────────────────
@@ -291,14 +328,16 @@ ${bold("DELIVERY")}
 
 ${bold("ADVANCED")}
   tools                    List every tool the server exposes
-  call <tool> [--k v ...]  Call any tool directly
+  call <tool> [--k v ...] [--json '<object>']
+                           Call any tool directly; --json passes the whole arguments object
+                           (nested objects, arrays of objects), --k v adds keys to it
 
 ${bold("GLOBAL")}
   --json                   Print raw JSON instead of formatted text
   --help, -h               Show help    •    --version, -v   Show version
 
-${dim("Get your personal MCP link from the app: open a project → a work order → Execute /")}
-${dim("\"connect your coding agent\", and copy the URL. Then: skaftor login <that-url>")}`;
+${dim(`Get your login command from the app: ${WHERE_LOGIN} › Log in, and copy it.`)}
+${dim("Then run it: skaftor login \"<login string>\"")}`;
 
 async function main() {
   const argv = process.argv.slice(2);
@@ -438,8 +477,6 @@ async function main() {
         if (!ok) { console.log(dim("cancelled")); return; }
       }
       if (cmd === "ssh") return sshWorkstation(conn, call.args.name, json);
-      if ((cmd === "up" || cmd === "launch") && call.args.name)
-        console.error(dim("note: a custom name isn't listed or ssh-able until per-user identity lands — omit the name to get an auto-attributed one"));
       return printToolResult(await callTool(conn, call.tool, call.args), json);
     }
 
@@ -469,18 +506,21 @@ async function main() {
     }
     case "call": {
       const conn = currentConn(cfg);
-      const tool = _[0];
-      if (!tool) die("usage: skaftor call <tool> [--key value ...]  (see `skaftor tools`)");
-      const args = {};
-      for (const [k, v] of Object.entries(flags)) {
+      const split = splitCallArgs(argv.slice(1));
+      const rest = parseArgs(split.argv);
+      const tool = rest._[0];
+      if (!tool) die("usage: skaftor call <tool> [--key value ...] [--json '<object>']  (see `skaftor tools`)");
+      const args = split.object;
+      for (const [k, v] of Object.entries(rest.flags)) {
         if (k === "json") continue;
+        if (Object.prototype.hasOwnProperty.call(args, k)) die(`"${k}" is given both in --json and as --${k}; give it once`);
         // numbers/booleans stay typed; comma lists become arrays
         if (typeof v === "boolean") args[k] = v;
         else if (/^-?\d+(\.\d+)?$/.test(v)) args[k] = Number(v);
         else if (v.includes(",")) args[k] = v.split(",").map((s) => s.trim());
         else args[k] = v;
       }
-      return printToolResult(await callTool(conn, tool, args), json);
+      return printToolResult(await callTool(conn, tool, args), !!rest.flags.json);
     }
 
     default:

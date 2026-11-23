@@ -7,7 +7,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -179,3 +179,24 @@ test("platform.json is the store; a legacy platform-shaped config.json is migrat
     assert.ok(existsSync(join(b.home, ".skaftor", "platform.json")), "migration persisted to platform.json");
   } finally { clean(b); }
 });
+
+// ---------- where the login command comes from, and the version ----------
+test("help and the not-logged-in error say where the app shows the login command (Settings › Workstations)", () => {
+  const WHERE = /Settings › Workstations › "From your terminal"/;
+  const help = run(["--help"]);
+  assert.match(help.out, WHERE);
+  assert.doesNotMatch(help.out, /connect your coding agent/i);
+  clean(help);
+  const who = run(["whoami"]);
+  assert.equal(who.code, 1);
+  assert.match(who.out, WHERE);
+  assert.doesNotMatch(who.out, /connect your coding agent/i);
+  clean(who);
+});
+
+test("--version is package.json's version", () => {
+  const v = run(["--version"]);
+  assert.equal(v.out.trim(), JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version);
+  clean(v);
+});
+
